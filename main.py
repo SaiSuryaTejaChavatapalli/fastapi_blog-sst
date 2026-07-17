@@ -1,50 +1,36 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates 
+from fastapi.staticfiles import StaticFiles
 
 app= FastAPI()
+
+app.mount("/static",StaticFiles(directory="static"), name="static")
+
+templates=Jinja2Templates(directory="templates")
 
 
 posts: list[dict]=[
     {
-    "userId": 1,
-    "id": 1,
-    "title": "sunt aut facere repellat provident occaecati excepturi optio reprehenderit",
-    "body": "quia et suscipit\nsuscipit recusandae consequuntur expedita et cum\nreprehenderit molestiae ut ut quas totam\nnostrum rerum est autem sunt rem eveniet architecto"
-  },
-  {
-    "userId": 1,
-    "id": 2,
-    "title": "qui est esse",
-    "body": "est rerum tempore vitae\nsequi sint nihil reprehenderit dolor beatae ea dolores neque\nfugiat blanditiis voluptate porro vel nihil molestiae ut reiciendis\nqui aperiam non debitis possimus qui neque nisi nulla"
-  },
-  {
-    "userId": 1,
-    "id": 3,
-    "title": "ea molestias quasi exercitationem repellat qui ipsa sit aut",
-    "body": "et iusto sed quo iure\nvoluptatem occaecati omnis eligendi aut ad\nvoluptatem doloribus vel accusantium quis pariatur\nmolestiae porro eius odio et labore et velit aut"
-  },
-  {
-    "userId": 1,
-    "id": 4,
-    "title": "eum et est occaecati",
-    "body": "ullam et saepe reiciendis voluptatem adipisci\nsit amet autem assumenda provident rerum culpa\nquis hic commodi nesciunt rem tenetur doloremque ipsam iure\nquis sunt voluptatem rerum illo velit"
-  },
-  {
-    "userId": 1,
-    "id": 5,
-    "title": "nesciunt quas odio",
-    "body": "repudiandae veniam quaerat sunt sed\nalias aut fugiat sit autem sed est\nvoluptatem omnis possimus esse voluptatibus quis\nest aut tenetur dolor neque"
-  },
+        "id": 1,
+        "author": "Corey Schafer",
+        "title": "FastAPI is Awesome",
+        "content": "This framework is really easy to use and super fast.",
+        "date_posted": "April 20, 2025",
+    },
+    {
+        "id": 2,
+        "author": "Jane Doe",
+        "title": "Python is Great for Web Development",
+        "content": "Python is a great language for web development, and FastAPI makes it even better.",
+        "date_posted": "April 21, 2025",
+    },
 ]
 
-@app.get("/", response_class=HTMLResponse,include_in_schema=False)
-@app.get("/first-post", response_class=HTMLResponse, include_in_schema=False)
-def home():
-    return f"<div><h1>Hello Sai Surya Teja </h1><p>{posts[0]['title']}</p></div>"
+@app.get("/",include_in_schema=False)
+def home(request:Request):
+    return templates.TemplateResponse(request, "home.html", {"posts":posts, "title":"Home"})
 
-@app.get("/hello")
-def hello():
-    return {"message":"Hello World!"}
 
 
 @app.get("/api/posts")
