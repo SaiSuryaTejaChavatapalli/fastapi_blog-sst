@@ -1,28 +1,33 @@
 from datetime import timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, status
 from fastapi.security import OAuth2PasswordRequestForm
+from PIL import UnidentifiedImageError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-
-from PIL import UnidentifiedImageError
 from starlette.concurrency import run_in_threadpool
-from image_utils import delete_profile_image, process_profile_image
 
 import models
 from auth import (
     CurrentUser,
     create_access_token,
     hash_password,
-    oauth2_scheme,
-    verify_access_token,
     verify_password,
 )
 from config import settings
 from database import get_db
-from schemas import PostResponse, Token, UserCreate, UserPrivate, UserPublic, UserUpdate
+from image_utils import delete_profile_image, process_profile_image
+from schemas import (
+    PaginatedPostsResponse,
+    PostResponse,
+    Token,
+    UserCreate,
+    UserPrivate,
+    UserPublic,
+    UserUpdate,
+)
 
 router = APIRouter()
 
@@ -99,11 +104,8 @@ async def login_for_access_token(
 
 
 @router.get("/me", response_model=UserPrivate)
-async def get_current_user(
-    current_user:CurrentUser
-):
+async def get_current_user(current_user: CurrentUser):
     return current_user
-   
 
 
 @router.get("/{user_id}", response_model=UserPublic)
@@ -115,8 +117,13 @@ async def get_user(user_id: int, db: Annotated[AsyncSession, Depends(get_db)]):
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
 
-@router.get("/{user_id}/posts", response_model=list[PostResponse])
-async def get_user_posts(user_id: int, db: Annotated[AsyncSession, Depends(get_db)]):
+@router.get("/{user_id}/posts", response_model=PaginatedPostsResponse)
+async def get_user_posts(
+    user_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    skip: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=100)] = settings.posts_per_page,
+):
     result = await db.execute(select(models.User).where(models.User.id == user_id))
     user = result.scalars().first()
     if not user:
@@ -124,29 +131,48 @@ async def get_user_posts(user_id: int, db: Annotated[AsyncSession, Depends(get_d
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found",
         )
+
+    count_result = await db.execute(
+        select(func.count())
+        .select_from(models.Post)
+        .where(models.Post.user_id == user_id),
+    )
+    total = count_result.scalar() or 0
+
     result = await db.execute(
         select(models.Post)
         .options(selectinload(models.Post.author))
         .where(models.Post.user_id == user_id)
-        .order_by(models.Post.date_posted.desc()),
+        .order_by(models.Post.date_posted.desc())
+        .offset(skip)
+        .limit(limit),
     )
     posts = result.scalars().all()
-    return posts
+
+    has_more = skip + len(posts) < total
+
+    return PaginatedPostsResponse(
+        posts=[PostResponse.model_validate(post) for post in posts],
+        total=total,
+        skip=skip,
+        limit=limit,
+        has_more=has_more,
+    )
 
 
 @router.patch("/{user_id}", response_model=UserPrivate)
 async def update_user(
     user_id: int,
     user_update: UserUpdate,
-    current_user:CurrentUser,
+    current_user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    if user_id !=current_user.id:
-        raise HTTPException (
-        status_code=status.HTTP_403_FORBIDDEN,
-        detail="Not authorized to update this post"
-    )
-    
+    if user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to update this user",
+        )
+
     result = await db.execute(select(models.User).where(models.User.id == user_id))
     user = result.scalars().first()
     if not user:
@@ -189,7 +215,6 @@ async def update_user(
         user.username = user_update.username
     if user_update.email is not None:
         user.email = user_update.email.lower()
-   
 
     await db.commit()
     await db.refresh(user)
@@ -197,11 +222,15 @@ async def update_user(
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_user(user_id: int, current_user:CurrentUser, db: Annotated[AsyncSession, Depends(get_db)]):
-    if user_id !=current_user.id:
-        raise HTTPException (
+async def delete_user(
+    user_id: int,
+    current_user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    if user_id != current_user.id:
+        raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to delete this post"
+            detail="Not authorized to delete this user",
         )
 
     result = await db.execute(select(models.User).where(models.User.id == user_id))
@@ -211,14 +240,16 @@ async def delete_user(user_id: int, current_user:CurrentUser, db: Annotated[Asyn
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found",
         )
-    old_filename=user.image_file
+
+    old_filename = user.image_file
+
     await db.delete(user)
     await db.commit()
+
     if old_filename:
         delete_profile_image(old_filename)
 
 
-## Upload Profile Picture Endpoint
 @router.patch("/{user_id}/picture", response_model=UserPrivate)
 async def upload_profile_picture(
     user_id: int,
@@ -260,7 +291,6 @@ async def upload_profile_picture(
     return current_user
 
 
-## Delete Profile Picture Endpoint
 @router.delete("/{user_id}/picture", response_model=UserPrivate)
 async def delete_user_picture(
     user_id: int,
