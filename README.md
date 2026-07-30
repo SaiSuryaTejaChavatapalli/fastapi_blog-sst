@@ -51,3 +51,52 @@ For Block Public Access settings for this bucket section:
 IAM -> policies -> Create Policy -> name -> create
 IAM - IAM users -> create user -> Permissions -> Attach policies directly -> search fastapi-blog-s3-policy -> next
 -> Security credentials- create access key -> Application running outside AWS -> copy access key and secret access key to local machine as it is visible only once -> keep it in .env file
+//-------------
+
+# Testing the API
+
+`uv add --dev pytest`
+
+### Moto: library that mocks AWS services
+
+` uv add --dev "moto[s3]"`
+-> HTTPX coming in intial setup, which will give async client
+-> [s3] means it will download files related to s3
+
+### Create Test directory
+
+` tests/__init__.py`
+` conftest.py` - It's a special file pytest recognises automatically
+` tests/test_posts.py` - prefix test\_ is need to pytest to pickup
+
+### Fast API Test Client for Sync Code
+
+```
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+demo_app = FastAPI()
+
+@demo_app.get("/")
+def demo_home():
+    return {"message" :" Hello"}
+
+client= TestClient(demo_app)
+
+def test_homepage():
+    response = client.get("/")
+    assert response.status_code == 200
+
+```
+
+### Run Test command
+
+` uv run pytest tests/test_demo.py -v`
+
+### Running single test in a file
+
+` uv run pytest tests/test_posts.py::test_get_posts_empty -v`
+
+### Print output, if we put any print statements in tests
+
+` uv run pytest tests/ -s`

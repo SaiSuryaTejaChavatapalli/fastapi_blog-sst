@@ -52,6 +52,13 @@ from schemas import (
 router = APIRouter()
 
 
+@router.get("", response_model=list[UserPublic], status_code=status.HTTP_200_OK)
+async def get_users(db: Annotated[AsyncSession, Depends(get_db)]):
+   result= await db.execute(select(models.User))
+   return result.scalars().all()
+
+
+
 @router.post(
     "",
     response_model=UserPrivate,
