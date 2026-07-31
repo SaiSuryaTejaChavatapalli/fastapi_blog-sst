@@ -23,5 +23,9 @@ dependencies = [
 [dependency-groups]
 dev = [
     "moto[s3]>=5.2.2",
+    "poethepoet>=0.48.0",
     "pytest>=9.1.1",
 ]
+[tool.poe.tasks]
+dev = "fastapi dev main.py"
+start = "fastapi run main.py"
