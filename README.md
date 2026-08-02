@@ -100,3 +100,78 @@ def test_homepage():
 ### Print output, if we put any print statements in tests
 
 ` uv run pytest tests/ -s`
+
+### Docker build
+
+`docker build -t fastapi-app .  `
+
+### Docker Run
+
+` docker run -p 8080:8080 --env-file .env fastapi-app`
+
+## Google Cloud
+
+`gcloud --version `
+
+` gcloud auth login` - prompts
+
+`  gcloud config set project PROJECT_ID`
+
+` gcloud services enable run.googleapis.com` - For running our containers
+
+` gcloud services enable cloudbuild.googleapis.com` - For building docker images in the cloud
+
+` gcloud services enable artifactregistry.googleapis.com` - For storing our docker images
+
+` gcloud services list --enabled`
+
+-> Create Artifact registry
+
+`gcloud artifacts repositories create fastapi-repo --repository-format=docker --location=asia-south1`
+
+## Build and Push to Artifact Registry
+
+`gcloud builds submit --tag asia-south1-docker.pkg.dev/YOUR_PROJECT_ID/fastapi-repo/fastapi-app`
+
+## Deploy to Cloud Run
+
+`gcloud run deploy fastapi-service --image asia-south1-docker.pkg.dev/fastapi-blog-sst/fastapi-repo/fastapi-app --region asia-south1 --allow-unauthenticated`
+
+## Create secret key
+
+` python3 -c "import secrets; print(secrets.token_hex(32))"`
+
+### In Google console
+
+-> Go to cloud run -> go to your service
+-> Add env evariables,
+change frontend url - https://fastapi-service-736178705031.asia-south1.run.app
+change mail port - 587
+Click Deploy
+
+-> Add domain name from your desired service
+
+### Verify domain ownership in Google search console
+
+-> Add your domain there (not url prefix)
+-> Verify ownership using TXT record, you need to add in your DNS provider (namecheap)-> Add new TXT record - @ - value (given by google)
+
+-> Once verified, we can create domain mapping using comamnd below
+
+` gcloud beta run domain-mappings describe --domain=myawesomeapp.com --region=us-east4`
+
+-> It will give some A records and AAA records (4 records each)
+-> Add it in your DNS provider as host @ (namecheap)
+-> After one hour or so, u will be able to see in new domain
+
+### After Code changes,
+
+`gcloud builds submit --tag asia-south1-docker.pkg.dev/YOUR_PROJECT_ID/fastapi-repo/fastapi-app`
+
+`gcloud run deploy fastapi-service --image asia-south1-docker.pkg.dev/YOUR_PROJECT_ID/fastapi-repo/fastapi-app --region asia-south1 --allow-unauthenticated`
+
+-> G Cloud Run rooling new version with zero downtime, if health cehcks fails it route traffics to old version
+
+-> If you change DB schema:
+
+-> alembic upgrade head, if you use two varibales, you can run this comamnd, otherwise change url and alembic upgrade head

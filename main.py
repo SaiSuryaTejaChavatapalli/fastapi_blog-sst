@@ -36,6 +36,28 @@ templates = Jinja2Templates(directory="templates")
 app.include_router(users.router, prefix="/api/users", tags=["users"])
 app.include_router(posts.router, prefix="/api/posts", tags=["posts"])
 
+
+@app.middleware("http")  # Usually nginx add this 
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+
+    response.headers["X-Frame-Options"] = "SAMEORIGIN" # Prevents other websites embedded our site in iframe
+
+    response.headers["X-Content-Type-Options"] = "nosniff" #Trust the conteny-type header we sent, not try to guess type of content is
+
+    if "Referrer-Policy" not in response.headers: # In reset we set, no-referrer to protect reset token in the url, we don't want to override that
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+
+    if request.url.hostname not in ("localhost", "127.0.0.1"): #Tells browsers to use https when visiting our site, but skip localhost
+        response.headers["Strict-Transport-Security"] = (
+            "max-age=63072000; includeSubDomains"
+        )
+
+    return response
+
+
+
+
 @app.get("/health")
 async def health_check(db: Annotated[AsyncSession, Depends(get_db)]):
     try:

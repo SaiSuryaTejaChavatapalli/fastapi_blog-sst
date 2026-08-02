@@ -1,3 +1,4 @@
+from urllib.parse import urlsplit, urlunsplit
 from pydantic import SecretStr 
 from pydantic_settings import BaseSettings, SettingsConfigDict 
 
@@ -39,7 +40,13 @@ class Settings(BaseSettings):
     
     frontend_url: str = "http://localhost:8000"
 
-    
+    @property
+    def clean_database_url(self) -> str:
+        """database_url with query params (sslmode, channel_binding, etc.)
+        stripped, since asyncpg doesn't accept them in the URL — pass SSL
+        via connect_args instead."""
+        parts = urlsplit(self.database_url)
+        return urlunsplit((parts.scheme, parts.netloc, parts.path, "", parts.fragment))
 
 
 settings= Settings() # Loaded from .env file

@@ -4,7 +4,8 @@ from config import settings
 
 
 engine = create_async_engine(
-  settings.database_url
+    settings.clean_database_url,
+    connect_args={"ssl": "require"},
 )
 
 AsyncSessionLocal = async_sessionmaker(
